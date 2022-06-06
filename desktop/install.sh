@@ -2,139 +2,101 @@
 
 set -euo pipefail
 
-# shellcheck source=common/common.sh
-. "../common/common.sh"
+help()
+{
+	echo "Usage: install
+		[ -n | --network-name ]
+		[ -H | --host-name ]
+		[ -t | --time-zone ]
+		[ -F | --format-disk <true|false> ]
+		[ -h | --help  ]"
+	exit 2
+}
 
-NETWORK_NAME="$1"
-HOST_NAME="$2"
-TIME_ZONE="${3:Australia/Melbourne}"
+. "../libs/logging.sh"
+. "../libs/network.sh"
+. "../libs/disk.sh"
+. "../libs/locale.sh"
+. "../libs/perf.sh"
+. "../libs/pacstrap.sh"
+. "../libs/dracut.sh"
+. "../libs/post-install.sh"
 
-info "Setup Archlinux from ISO on desktop"
+SHORT=n:,H:,t:,F:,h
+LONG=network-name:,host-name:,time-zone:,format-disk:,help
+OPTS=$(getopt -a -n install --options $SHORT --longoptions $LONG -- "$@")
 
-WIRELESS_DEVICE="$(iwctl device list)"
+VALID_ARGUMENTS=$# # Returns the count of arguments that are in short or long options
 
-info "Connect to WIFI $NETWORK_NAME"
-
-iwctl station "$WIRELESS_DEVICE" connect "$NETWORK_NAME"
-
-iwctl station "$WIRELESS_DEVICE" show
-
-if ! ping -oc 5 archlinux.org > /dev/null; then
-	error "Not connected to Internet"
+if [ "$VALID_ARGUMENTS" -eq 0 ]; then
+  help
 fi
 
-info "Enable NTP"
-timedatectl set-ntp true
+eval set -- "$OPTS"
 
-TARGET_DEVICE=/dev/nvme0n1
-OS_PARTITION_LABEL=ARCH
-OS_PARTITION_PATH="/dev/disk/by-partlabel/$OS_PARTITION_LABEL"
-EFI_PARTITION_LABEL="EFISYSTEM"
-EFI_PARTITION_PATH="/dev/disk/by-partlabel/$EFI_PARTITION_LABEL"
-SWAP_PARTITION_LABEL="SWAP"
-SWAP_PARTITION_PATH="/dev/disk/by-partlabel/$SWAP_PARTITION_LABEL"
+HOST_NAME=''
+TIME_ZONE=''
+NETWORK_NAME=''
+FORMAT_DISK=false
 
-info "Zero out disk $TARGET_DEVICE"
-sgdisk -Z "$TARGET_DEVICE"
-info "Create disk partitions on $TARGET_DEVICE"
-gdisk \
-	-n1:0:+512M -t1:ef00 -c1:"$EFI_PARTITION_LABEL" \
-	-n2:0:+16G -t2:8200 -c2:"$SWAP_PARTITION_LABEL" \
-	-N3 -t3:8304 -c3:"$OS_PARTITION_LABEL" \
-	"$TARGET_DEVICE"
-sleep 5
-partprobe -s "$TARGET_DEVICE"
-
-while [ ! -b "$OS_PARTITION_PATH" ]; do
-	echo "Wait for device to be ready"
-	sleep 5
+while :
+do
+	case "$1" in
+	-n | --network-name )
+		NETWORK_NAME="$2"
+		shift 2
+		;;
+	-H | --host-name )
+		HOST_NAME="$2"
+		shift 2
+		;;
+	-t | --time-zone )
+		TIME_ZONE="2"
+		shift 2
+		;;
+	-F | --format-disk )
+		FORMAT_DISK="$2"
+		shift 2
+		;;
+	-h | --help)
+		help
+		;;
+	--)
+		shift;
+		break
+		;;
+	*)
+		echo "Unexpected option: $1"
+		help
+		;;
+  esac
 done
 
-info "Setup LUKS encryption on $OS_PARTITION_PATH"
-cryptsetup luksFormat --type luks2 "$OS_PARTITION_PATH"
-cryptsetup luksOpen "$OS_PARTITION_PATH" root
-
-info "Setup LUKS encryption on $SWAP_PARTITION_PATH"
-cryptsetup luksFormat --type luks2 "$SWAP_PARTITION_PATH"
-cryptsetup luksOpen "$SWAP_PARTITION_PATH" swap
-
-info "Create and mount file system mount points"
-ROOT_DEVICE=/dev/mapper/root
-SWAP_DEVICE=/dev/mapper/swap
-mkfs.fat -F32 -n boot "$EFI_PARTITION_PATH"
-mkfs.btrfs -f -L arch "$ROOT_DEVICE"
-mkswap "$SWAP_DEVICE"
-
-mount "$ROOT_DEVICE" /mnt
-mkdir /mnt/efi
-mount "$EFI_PARTITION_PATH" /mnt/efi
-for subvol in var var/log var/cache var/tmp srv home; do
-	btrfs subvolume create "/mnt/$subvol"
-done
-
-info "Tune swap performance"
-echo "vm.swappiness=10" > /mnt/etc/sysctl.d/99-swappiness.conf
-
-info "Setup timezone"
-ln -sf "/usr/share/zoneinfo/${TIME_ZONE}" /mnt/etc/localtime
-
-info "Setup hostname"
-echo "$HOST_NAME" >/mnt/etc/hostname
-
-info "Install base packages"
-reflector --verbose --latest 5 --sort rate --protocol https --country Australia --save /etc/pacman.d/mirrorlist
-pacstrap /mnt base base-devel neovim git openssh amd-ucode \
-yubikey-manager reflector linux-zen linux-zen-headers linux-firmware dracut btrfs-progs \
-xf86-video-amdgpu mesa vulkan-radeon libva-mesa-driver
-
-info "Setup locale"
-sed -i -e '/^#en_AU.UTF-8/s/^#//' /mnt/etc/locale.gen
-sed -i -e '/^#zh_CN.UTF-8/s/^#//' /mnt/etc/locale.gen
-
-cat<<EOF > /mnt/etc/locale.conf
-LANG=en_AU.UTF-8
-LANGUAGE=en_AU:zh_CN
-EOF
-echo 'KEYMAP=us' > /mnt/etc/vconsole.conf
-
-info "Setup dracut"
-DRACUT_CONF_DIR="/mnt/etc/dracut.conf.d"
-if [ ! -d "$DRACUT_CONF_DIR" ]; then
-	mkdir -p "$DRACUT_CONF_DIR"
+if [ -z "$HOST_NAME" ]; then
+	error_exit_log "Host name is required by using -H or --host-name argument"
 fi
 
-cat <<EOF > "$DRACUT_CONF_DIR/arch-defaults.conf"
-hostonly=yes
-hostonly_cmdline=no
-compress=lz4
-show_modules=yes
+if [ -z "$TIME_ZONE" ]; then
+	TIME_ZONE="Australia/Melbourne"
+fi
 
-add_drivers+=" lz4 lz4_compress "
-omit_dracutmodules+=" iscsi mdraid  "
-uefi=yes
-early_microcode=yes
-CMDLINE=(
-	zswap.enabled=1
-	zswap.compressor=lz4
-	zswap.zpool=z3fold
-)
-kernel_cmdline+=" ${CMDLINE[*]} "
-unset CMDLINE
-EOF
+info_log "Setup Archlinux from ISO on desktop"
 
-cat <<EOF > "$DRACUT_CONF_DIR/gpu-kms.conf"
-add_drivers+=" amdgpu "
-EOF
+connect_to_internet "$NETWORK_NAME"
 
-info "Post install"
-arch-chroot /mnt
-locale-gen
-hwclock --systohc --utc
-systemctl enable systemd-homed
-systemctl enable systemd-timesyncd
-passwd root
-pacman -S --noconfirm --asdeps binutils elfutils
-dracut -f --regenerate-all
-bootctl install
-swapon /swap/swapfile
-reboot
+if [ "$FORMAT_DISK" = true ]; then
+	format_disk "/dev/nvme0n1"
+fi
+
+pacstrap_install
+
+setup_time "$TIME_ZONE"
+setup_host_name "$HOST_NAME"
+tune_swap
+
+info_log "Setup dracut"
+setup_dracut "amdgpu"
+
+info_log "Chroot and perform post installation"
+chroot_install
+info_log "Installation completed"
