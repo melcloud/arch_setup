@@ -20,6 +20,7 @@ help()
 . "../libs/perf.sh"
 . "../libs/pacstrap.sh"
 . "../libs/dracut.sh"
+. "../libs/locale.sh"
 . "../libs/chroot.sh"
 
 SHORT=n:,H:,t:,F:,h
@@ -92,6 +93,7 @@ pacstrap_install
 
 setup_time "$TIME_ZONE"
 setup_host_name "$HOST_NAME"
+setup_locale
 tune_swap
 
 info_log "Setup dracut"
