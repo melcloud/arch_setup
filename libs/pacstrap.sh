@@ -7,7 +7,7 @@ function pacstrap_install() {
 	base_packages=(
 		'base' 'base-devel'
 		'linux-zen' 'linux-zen-headers' 'linux-firmware' 'dracut' 'btrfs-progs'
-		'libfido2' 'reflector' 'neovim' 'git' 'openssh' 'mesa'
+		'libfido2' 'reflector' 'neovim' 'git' 'openssh' 'mesa' 'fish'
 		'tpm2-tools' 'sbctl' 'rng-tools'
 	)
 
