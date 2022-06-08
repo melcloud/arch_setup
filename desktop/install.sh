@@ -20,7 +20,7 @@ help()
 . "../libs/perf.sh"
 . "../libs/pacstrap.sh"
 . "../libs/dracut.sh"
-. "../libs/post-install.sh"
+. "../libs/chroot.sh"
 
 SHORT=n:,H:,t:,F:,h
 LONG=network-name:,host-name:,time-zone:,format-disk:,help
