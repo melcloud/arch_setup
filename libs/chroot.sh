@@ -8,6 +8,7 @@ chroot_install() {
 	systemctl enable systemd-homed
 	systemctl enable systemd-timesyncd
 	systemctl enable rngd
+	# update the bootloader upon the next boot
 	systemctl enable systemd-boot-update
 	echo "root:$root_password" | chpasswd
 	pacman -S --noconfirm --needed --asdeps binutils elfutils
