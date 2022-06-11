@@ -12,7 +12,7 @@ function format_disk() {
 	SWAP_PARTITION_PATH="/dev/disk/by-partlabel/$SWAP_PARTITION_LABEL"
 
 	info_log "Zero out disk $TARGET_DEVICE"
-	#dd if=/dev/zero of="$TARGET_DEVICE" bs=10M status=progress
+	dd if=/dev/zero of="$TARGET_DEVICE" bs=1M status=progress
 	sgdisk -Z "$TARGET_DEVICE"
 	info_log "Create disk partitions on $TARGET_DEVICE"
 	sgdisk \
