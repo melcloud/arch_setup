@@ -20,7 +20,7 @@ function connect_to_internet() {
 
 	# Check again to make sure there is network connectivity
 
-	if ping -qc 1 archlinux.org > /dev/null 2>&1; then
+	if ping -qc 3 archlinux.org > /dev/null 2>&1; then
 		info_log "Connected to internet"
 	else
 		error_exit_log "No Internet connection, re-try the iwctl commands"
