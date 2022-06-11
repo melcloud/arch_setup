@@ -7,6 +7,7 @@ chroot_install() {
 	hwclock --systohc --utc
 	systemctl enable systemd-homed
 	systemctl enable systemd-timesyncd
+	systemctl enable rngd
 	systemctl enable systemd-boot-update
 	echo "root:$root_password" | chpasswd
 	pacman -S --noconfirm --needed --asdeps binutils elfutils
