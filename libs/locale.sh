@@ -8,7 +8,7 @@ function setup_locale() {
 
 	cat<<EOF > /mnt/etc/locale.conf
 	LANG=en_AU.UTF-8
-	LANGUAGE=en_AU:zh_CN
+	LANGUAGE=en_AU:en_GB:en
 EOF
 	echo 'KEYMAP=us' > /mnt/etc/vconsole.conf
 }
