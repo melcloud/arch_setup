@@ -20,7 +20,7 @@ function pacstrap_install() {
 	fi
 
 	info_log "Install base packages"
-	reflector --verbose -l 3 --sort rate --protocol https --country Australia --save /etc/pacman.d/mirrorlist
+	reflector --verbose -l 3 --sort age --protocol https --country Australia --save /etc/pacman.d/mirrorlist
 
 	pacstrap /mnt "${base_packages[@]}"
 }
